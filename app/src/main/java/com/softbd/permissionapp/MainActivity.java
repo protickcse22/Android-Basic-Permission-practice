@@ -1,138 +1,94 @@
 package com.softbd.permissionapp;
 
-import android.Manifest;
-import android.app.AlertDialog;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Bundle;
 import android.provider.Settings;
-import android.support.annotation.NonNull;
-import android.support.v4.app.ActivityCompat;
-import android.support.v4.content.ContextCompat;
-import android.support.v7.app.AppCompatActivity;
+import android.view.View;
+import android.widget.Button;
+import android.widget.Toast;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import androidx.annotation.NonNull;
+import androidx.appcompat.app.AlertDialog;
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.ActivityCompat;
 
 public class MainActivity extends AppCompatActivity {
-
-
-    private static final int PERMISSIONS_REQUEST_CODE = 1240;
-    String[] appPermissions = {
-            Manifest.permission.WRITE_EXTERNAL_STORAGE,
-            Manifest.permission.ACCESS_FINE_LOCATION,
-            Manifest.permission.CAMERA,
-            Manifest.permission.WRITE_CONTACTS,
-            Manifest.permission.RECORD_AUDIO,
-            Manifest.permission.SEND_SMS,
-            Manifest.permission.WRITE_CALL_LOG
+    private Button permissionButton;
+    private View.OnClickListener grantPermission = new View.OnClickListener() {
+        @Override
+        public void onClick(View view) {
+            permissionForAudioRecorder(PermissionManager.AUDIO_RECORDER_PERMISSION);
+        }
     };
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        if (checkAndRequestPermissions()) {
-
-        }
+        permissionButton = findViewById(R.id.bt_grant_permission);
+        permissionButton.setOnClickListener(grantPermission);
     }
 
-    public AlertDialog showDialog(String title, String msg, String positiveLabel,
-                                  DialogInterface.OnClickListener positiveOnClick, String negativeLabel,
-                                  DialogInterface.OnClickListener negativeOnClick, boolean isCancelAble) {
-        AlertDialog.Builder builder = new AlertDialog.Builder(this);
-        builder.setTitle(title);
-        builder.setCancelable(isCancelAble);
-        builder.setMessage(msg);
-        builder.setPositiveButton(positiveLabel, positiveOnClick);
-        builder.setNegativeButton(negativeLabel, negativeOnClick);
-
-        AlertDialog alter = builder.create();
-        alter.show();
-        return alter;
-
-    }
-
-
-    public boolean checkAndRequestPermissions() {
-        List<String> listPermissionsNeeded = new ArrayList<>();
-        for (String perm : appPermissions) {
-            if (ContextCompat.checkSelfPermission(this, perm) != PackageManager.PERMISSION_GRANTED) {
-                listPermissionsNeeded.add(perm);
+    private void permissionForAudioRecorder(final String... permissions) {
+        PermissionManager.getInstance().checkAllPermission(MainActivity.this, new PermissionManager.PermissionAskListener() {
+            @Override
+            public void onNeedPermission() {
+                ActivityCompat.requestPermissions(MainActivity.this, permissions, PermissionManager.AUDIO_RECORDER_PERMISSION_REQUEST_CODE);
             }
-        }
-        if (!listPermissionsNeeded.isEmpty()) {
-            ActivityCompat.requestPermissions(this, listPermissionsNeeded.toArray(new String[listPermissionsNeeded.size()]), PERMISSIONS_REQUEST_CODE);
-            return false;
-        }
-        return true;
-    }
 
+            @Override
+            public void onPermissionPreviouslyDenied() {
+                PermissionManager.getInstance().showRationalDialog(MainActivity.this,"Permission Denied",
+                        "Without this permission this app is unable to give voice input. Are you sure you want to deny this permission.",PermissionManager.AUDIO_RECORDER_PERMISSION);
+            }
+
+            @Override
+            public void onPermissionPreviouslyDeniedWithNeverAskAgain() {
+                PermissionManager.getInstance().showSettingsDialog(MainActivity.this,"Permission Denied", "Now you must allow audio recorder and storage access from settings.");
+            }
+
+            @Override
+            public void onPermissionGranted() {
+                Toast.makeText(MainActivity.this, "Permission granted", Toast.LENGTH_SHORT).show();
+            }
+        }, PermissionManager.PermissionType.AUDIO_RECORDER, permissions);
+    }
 
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        if (requestCode == PERMISSIONS_REQUEST_CODE) {
-            HashMap<String, Integer> permissionResults = new HashMap<>();
-            int deniedCount = 0;
-            for (int i = 0; i < grantResults.length; i++) {
-                if (grantResults[i] == PackageManager.PERMISSION_DENIED) {
-                    permissionResults.put(permissions[i], grantResults[i]);
-                    deniedCount++;
-                }
-
-            }
-            if (deniedCount == 0) {
-
-            } else {
-                for (Map.Entry<String, Integer> enter : permissionResults.entrySet()) {
-                    String permName = enter.getKey();
-                    int permResult = enter.getValue();
-
-
-                    if (ActivityCompat.shouldShowRequestPermissionRationale(this, permName)) {
-                        showDialog("", "this app needs Locations, Microphone, camera, storage, Contacts permission to work without and problem",
-                                "Yes, Grant permissions", new DialogInterface.OnClickListener() {
-                                    @Override
-                                    public void onClick(DialogInterface dialog, int which) {
-                                        dialog.dismiss();
-                                        checkAndRequestPermissions();
-                                    }
-                                }, "No, Exit App", new DialogInterface.OnClickListener() {
-                                    @Override
-                                    public void onClick(DialogInterface dialog, int which) {
-                                        dialog.dismiss();
-                                        finish();
-                                    }
-                                }, false);
+        switch (requestCode) {
+            case PermissionManager.AUDIO_RECORDER_PERMISSION_REQUEST_CODE:
+                boolean flag = false;
+                if (grantResults.length > 0) {
+                    for (int i : grantResults) {
+                        if (i == PackageManager.PERMISSION_GRANTED) {
+                            flag = true;
+                        } else {
+                            flag = false;
+                            break;
+                        }
+                    }
+                    if (flag) {
+                        Toast.makeText(this, "Permission granted first", Toast.LENGTH_SHORT).show();
                     } else {
-                        showDialog("", "You have denied some permission, allow all permissions at [setting] > [Permission]",
-                                "Go to settings", new DialogInterface.OnClickListener() {
-                                    @Override
-                                    public void onClick(DialogInterface dialog, int which) {
-                                        dialog.dismiss();
-                                        Intent intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                                                Uri.fromParts("package", getPackageName(), null));
-                                        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                                        startActivity(intent);
-                                        finish();
-                                    }
-                                }, "No, Exit App", new DialogInterface.OnClickListener() {
-                                    @Override
-                                    public void onClick(DialogInterface dialog, int which) {
-                                        dialog.dismiss();
-                                        finish();
-                                    }
-                                }, false);
-                        break;
+                        // Permission was denied.......
+                        Toast.makeText(this, "Permission Denied", Toast.LENGTH_SHORT).show();
                     }
 
                 }
-            }
+                break;
+            case PermissionManager.CAMERA_PERMISSION_REQUEST_CODE:
+                if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                    Toast.makeText(this, "Permission Granted first", Toast.LENGTH_SHORT).show();
+                } else {
+                    Toast.makeText(this, "Permission Denied", Toast.LENGTH_SHORT).show();
+                }
+                break;
         }
     }
+
 }
